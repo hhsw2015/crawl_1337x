@@ -1,5 +1,8 @@
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
 from bs4 import BeautifulSoup
 import csv
 import time
@@ -11,7 +14,6 @@ import subprocess
 import logging
 import random
 
-# 配置日志
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 USER_AGENTS = [
@@ -79,12 +81,12 @@ def get_torrent_page(username, page_num):
     for attempt in range(MAX_RETRIES):
         try:
             driver.get(url)
-            time.sleep(5)  # 等待页面加载
-            if "403" in driver.title or "Forbidden" in driver.title:
-                raise Exception("403 Forbidden encountered")
+            # 等待页面加载完成，确保 table-list 出现
+            WebDriverWait(driver, 10).until(
+                EC.presence_of_element_located((By.CLASS_NAME, "table-list"))
+            )
             html = driver.page_source
             soup = BeautifulSoup(html, 'html.parser')
-            # 调试：保存页面内容
             with open(f"debug_page_{page_num}.html", "w", encoding="utf-8") as f:
                 f.write(html)
             logging.info(f"Saved debug HTML for page {page_num}")
@@ -105,10 +107,9 @@ def extract_torrent_links(soup, page_num):
         return []
     
     torrent_links = []
-    # 更新解析逻辑，适应可能的结构变化
     table = soup.find("table", class_="table-list")
     if table:
-        for index, tr in enumerate(table.find_all("tr")):
+        for index, tr in enumerate(table.find_all("tr")[1:]):  # 跳过表头
             name_td = tr.find("td", class_="coll-1 name")
             if name_td:
                 link_tag = name_td.find_all("a")[-1]
@@ -123,9 +124,9 @@ def crawl_detail_page(torrent_url, page_num, index, retries=0):
     driver = get_driver()
     try:
         driver.get(torrent_url)
-        time.sleep(5)
-        if "403" in driver.title or "Forbidden" in driver.title:
-            raise Exception("403 Forbidden encountered")
+        WebDriverWait(driver, 10).until(
+            EC.presence_of_element_located((By.CLASS_NAME, "list"))
+        )
         soup = BeautifulSoup(driver.page_source, 'html.parser')
 
         title_tag = soup.find("title")
