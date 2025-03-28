@@ -30,13 +30,14 @@ jobs:
         uses: actions/setup-python@v4
         with:
           python-version: '3.9'
+        id: setup-python  # 添加 ID 以便引用
 
       - name: Install dependencies
         run: |
-          python -m pip install --upgrade pip
-          pip install py1337x tqdm
-          pip show py1337x  # 检查 py1337x 是否安装成功
-          pip list          # 列出所有已安装的包
+          ${{ steps.setup-python.outputs.python-path }} -m pip install --upgrade pip
+          ${{ steps.setup-python.outputs.python-path }} -m pip install py1337x tqdm
+          ${{ steps.setup-python.outputs.python-path }} -m pip show py1337x
+          ${{ steps.setup-python.outputs.python-path }} -m pip list
 
       - name: Run crawler
         env:
@@ -44,7 +45,7 @@ jobs:
           START_PAGE: ${{ github.event.inputs.start_page }}
           END_PAGE: ${{ github.event.inputs.end_page }}
         run: |
-          python crawler.py
+          ${{ steps.setup-python.outputs.python-path }} crawler.py
 
       - name: Commit and push final changes
         if: always()
