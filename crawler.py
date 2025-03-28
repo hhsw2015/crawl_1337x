@@ -8,18 +8,27 @@ import sys
 import os
 import subprocess
 import logging
+import random
+import cloudscraper
 
 # 配置日志
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-headers = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
-}
+# 随机 User-Agent 列表
+USER_AGENTS = [
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.4430.212 Safari/537.36",
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/89.0.4389.82 Safari/537.36",
+    "Mozilla/5.0 (iPhone; CPU iPhone OS 14_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.0 Mobile/15E148 Safari/604.1",
+]
 
+# 常量配置
 MAX_RETRIES = 3
 RETRY_DELAY = 5
 MAX_WORKERS = 10
 COMMIT_INTERVAL = 10  # 每 10 页提交一次
+MAX_CONSECUTIVE_FAILURES = 5  # 连续失败 5 次后终止
+BASE_URL = "https://1337x.st"  # 使用镜像站，可根据需要更改
 
 def init_csv(username):
     """初始化 CSV 文件，如果文件不存在则创建并写入表头"""
@@ -46,21 +55,13 @@ def load_existing_ids(csv_file):
 def git_sync_and_commit(csv_file, message):
     """同步远程仓库代码并提交更改"""
     try:
-        # 配置 Git 用户信息
         subprocess.run(["git", "config", "--global", "user.email", "hhsw2015@gmail.com"], check=True)
         subprocess.run(["git", "config", "--global", "user.name", "hhsw2015"], check=True)
-
-        # 拉取最新代码
         subprocess.run(["git", "pull", "origin", "main"], check=True)
         logging.info("Successfully pulled latest changes from remote repository")
-
-        # 添加更改
         subprocess.run(["git", "add", csv_file], check=True)
-
-        # 提交更改
         result = subprocess.run(["git", "commit", "-m", message], capture_output=True, text=True)
         if result.returncode == 0:
-            # 推送更改
             subprocess.run(["git", "push"], check=True)
             logging.info(f"Git commit successful: {message}")
         else:
@@ -71,10 +72,16 @@ def git_sync_and_commit(csv_file, message):
 
 def get_torrent_page(username, page_num):
     """获取指定用户和页数的种子列表页面"""
-    url = f"https://1337x.to/{username}-torrents/{page_num}/"
+    url = f"{BASE_URL}/{username}-torrents/{page_num}/"
+    headers = {"User-Agent": random.choice(USER_AGENTS)}
+    proxies = {
+        "http": os.getenv("HTTP_PROXY"),
+        "https": os.getenv("HTTPS_PROXY")
+    }
+    scraper = cloudscraper.create_scraper()  # 支持 Cloudflare 绕过
     for attempt in range(MAX_RETRIES):
         try:
-            response = requests.get(url, headers=headers, timeout=10)
+            response = scraper.get(url, headers=headers, timeout=10, proxies=proxies)
             response.raise_for_status()
             return BeautifulSoup(response.text, 'html.parser')
         except requests.RequestException as e:
@@ -95,29 +102,31 @@ def extract_torrent_links(soup, page_num):
     for index, tr in enumerate(soup.find_all("tr")):
         link_tag = tr.find("td", class_="coll-1 name").find_all("a")[-1] if tr.find("td", class_="coll-1 name") else None
         if link_tag and link_tag.get("href"):
-            full_url = "https://1337x.to" + link_tag["href"]
-            torrent_links.append((full_url, page_num, index))  # 添加 index 保留顺序
+            full_url = f"{BASE_URL}" + link_tag["href"]
+            torrent_links.append((full_url, page_num, index))
     logging.info(f"Page {page_num}: Found {len(torrent_links)} torrent links")
     return torrent_links
 
 def crawl_detail_page(torrent_url, page_num, index, retries=0):
-    """爬取详细页面并提取所需信息，支持重试，超过重试次数终止程序"""
+    """爬取详细页面并提取所需信息"""
     sub_page_id = torrent_url.split("/torrent/")[1].split("/")[0]
+    headers = {"User-Agent": random.choice(USER_AGENTS)}
+    proxies = {
+        "http": os.getenv("HTTP_PROXY"),
+        "https": os.getenv("HTTPS_PROXY")
+    }
+    scraper = cloudscraper.create_scraper()
     try:
-        response = requests.get(torrent_url, headers=headers, timeout=10)
+        response = scraper.get(torrent_url, headers=headers, timeout=10, proxies=proxies)
         response.raise_for_status()
         soup = BeautifulSoup(response.text, 'html.parser')
 
-        # 提取标题，保留原始格式
         title_tag = soup.find("title")
         title = title_tag.text.strip().replace(" | 1337x", "") if title_tag else "N/A"
-
-        # 提取磁力链接，只保留 btih 部分
         magnet_tag = soup.find("a", href=lambda x: x and "magnet:?" in x)
         magnet_link_full = magnet_tag["href"] if magnet_tag else "N/A"
         magnet_link = magnet_link_full.split("&")[0] if magnet_link_full != "N/A" else "N/A"
 
-        # 提取文件大小和类别
         file_size = "N/A"
         category = "N/A"
         for ul in soup.find_all("ul", class_="list"):
@@ -135,7 +144,7 @@ def crawl_detail_page(torrent_url, page_num, index, retries=0):
             "file_size": file_size,
             "category": category,
             "magnet_link": magnet_link,
-            "index": index  # 保留原始顺序
+            "index": index
         }
     except requests.RequestException as e:
         logging.error(f"Error fetching detail page {torrent_url}: {e}")
@@ -153,11 +162,18 @@ def crawl_1337x(username, start_page, end_page):
     existing_ids = load_existing_ids(csv_file)
     pbar = tqdm(range(start_page, end_page - 1, -1), desc="Crawling pages")
     page_count = 0
+    consecutive_failures = 0
 
     for page_num in pbar:
         soup = get_torrent_page(username, page_num)
         if not soup:
+            consecutive_failures += 1
+            if consecutive_failures >= MAX_CONSECUTIVE_FAILURES:
+                logging.error(f"Consecutive failures reached {MAX_CONSECUTIVE_FAILURES}. Terminating program.")
+                sys.exit(1)
             continue
+        else:
+            consecutive_failures = 0
 
         torrent_links = extract_torrent_links(soup, page_num)
         if not torrent_links:
@@ -171,10 +187,9 @@ def crawl_1337x(username, start_page, end_page):
                 result = future.result()
                 if result and result["sub_page_id"] not in existing_ids:
                     results.append(result)
-                    existing_ids.add(result["sub_page_id"])  # 更新已存在 ID 集合
+                    existing_ids.add(result["sub_page_id"])
 
         if results:
-            # 按原始 index 排序，确保与页面顺序一致
             results.sort(key=lambda x: x["index"])
             with open(csv_file, mode='a', newline='', encoding='utf-8') as file:
                 writer = csv.writer(file)
@@ -187,7 +202,7 @@ def crawl_1337x(username, start_page, end_page):
                 git_sync_and_commit(csv_file, f"Update data for pages {page_num + COMMIT_INTERVAL - 1} to {page_num}")
 
         pbar.update(1)
-        time.sleep(1)  # 防止请求过快被封
+        time.sleep(3)  # 增加请求间隔到 3 秒
 
     if page_count % COMMIT_INTERVAL != 0 and results:
         git_sync_and_commit(csv_file, f"Final update for pages {start_page} to {end_page}")
