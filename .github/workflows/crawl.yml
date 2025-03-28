@@ -17,7 +17,7 @@ on:
         default: '1'
 
 permissions:
-  contents: write  # 授予写权限以推送更改
+  contents: write
 
 jobs:
   crawl:
@@ -34,13 +34,15 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install requests beautifulsoup4 tqdm
+          pip install requests beautifulsoup4 tqdm cloudscraper
 
       - name: Run crawler
         env:
           USERNAME: ${{ github.event.inputs.username }}
           START_PAGE: ${{ github.event.inputs.start_page }}
           END_PAGE: ${{ github.event.inputs.end_page }}
+          HTTP_PROXY: ${{ secrets.HTTP_PROXY }}  # 可选：在 Secrets 中配置代理
+          HTTPS_PROXY: ${{ secrets.HTTPS_PROXY }}
         run: |
           python crawler.py
 
@@ -49,7 +51,7 @@ jobs:
         run: |
           git config --global user.name "hhsw2015"
           git config --global user.email "hhsw2015@gmail.com"
-          git pull origin main  # 确保最后同步
+          git pull origin main
           git add "${{ github.event.inputs.username }}.csv"
           git commit -m "Final commit after crawl" || echo "No changes to commit"
           git push || echo "Push failed, possibly no changes or permission issue"
