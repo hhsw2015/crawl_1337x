@@ -46,7 +46,7 @@ jobs:
             echo "Failed to download ChromeDriver for $CHROME_VERSION, trying fallback version"
             wget -q "https://storage.googleapis.com/chrome-for-testing-public/134.0.6998.165/linux64/chromedriver-linux64.zip"
           }
-          ls -l  # 检查文件是否存在
+          ls -l
           unzip -o chromedriver-linux64.zip || echo "Failed to unzip ChromeDriver"
           sudo mv -f chromedriver-linux64/chromedriver /usr/local/bin/
           sudo chmod +x /usr/local/bin/chromedriver
@@ -59,6 +59,13 @@ jobs:
           END_PAGE: ${{ github.event.inputs.end_page }}
         run: |
           python crawler.py
+
+      - name: Upload debug files
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: debug-html
+          path: debug_page_*.html
 
       - name: Commit and push final changes
         if: always()
