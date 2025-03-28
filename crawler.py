@@ -1,10 +1,4 @@
-from selenium import webdriver
-from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.chrome.service import Service
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
-from bs4 import BeautifulSoup
+from py1337x import Py1337x
 import csv
 import time
 from tqdm import tqdm
@@ -17,18 +11,11 @@ import random
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-USER_AGENTS = [
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.4430.212 Safari/537.36",
-    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/89.0.4389.82 Safari/537.36",
-]
-
 MAX_RETRIES = 3
 RETRY_DELAY = 5
 MAX_WORKERS = 10
 COMMIT_INTERVAL = 10
 MAX_CONSECUTIVE_FAILURES = 5
-BASE_URL = "https://1337x.st"
 
 def init_csv(username):
     csv_file = f"{username}.csv"
@@ -67,88 +54,33 @@ def git_sync_and_commit(csv_file, message):
         logging.error(f"Git error: {e.stderr}")
         raise
 
-def get_driver():
-    chrome_options = Options()
-    chrome_options.add_argument("--headless")
-    chrome_options.add_argument("--no-sandbox")
-    chrome_options.add_argument("--disable-dev-shm-usage")
-    chrome_options.add_argument(f"user-agent={random.choice(USER_AGENTS)}")
-    # 显式指定 ChromeDriver 路径
-    service = Service(executable_path="/usr/local/bin/chromedriver")
-    driver = webdriver.Chrome(service=service, options=chrome_options)
-    logging.info("ChromeDriver initialized successfully")
-    return driver
-
-def get_torrent_page(username, page_num):
-    url = f"{BASE_URL}/{username}-torrents/{page_num}/"
-    driver = get_driver()
-    for attempt in range(MAX_RETRIES):
-        try:
-            driver.get(url)
-            WebDriverWait(driver, 10).until(
-                EC.presence_of_element_located((By.CLASS_NAME, "table-list"))
-            )
-            html = driver.page_source
-            soup = BeautifulSoup(html, 'html.parser')
-            with open(f"debug_page_{page_num}.html", "w", encoding="utf-8") as f:
-                f.write(html)
-            logging.info(f"Saved debug HTML for page {page_num}")
-            driver.quit()
-            return soup
-        except Exception as e:
-            logging.error(f"Error fetching page {url}: {e}")
-            driver.quit()
-            if attempt < MAX_RETRIES - 1:
-                logging.info(f"Retrying {url} ({attempt + 1}/{MAX_RETRIES}) after {RETRY_DELAY} seconds...")
-                time.sleep(RETRY_DELAY)
-            else:
-                logging.error(f"Max retries reached for {url}. Skipping.")
-                return None
-
-def extract_torrent_links(soup, page_num):
-    if not soup:
-        return []
-    
-    torrent_links = []
-    table = soup.find("table", class_="table-list")
-    if table:
-        for index, tr in enumerate(table.find_all("tr")[1:]):  # 跳过表头
-            name_td = tr.find("td", class_="coll-1 name")
-            if name_td:
-                link_tag = name_td.find_all("a")[-1]
-                if link_tag and link_tag.get("href"):
-                    full_url = f"{BASE_URL}" + link_tag["href"]
-                    torrent_links.append((full_url, page_num, index))
-    logging.info(f"Page {page_num}: Found {len(torrent_links)} torrent links")
-    return torrent_links
-
-def crawl_detail_page(torrent_url, page_num, index, retries=0):
-    sub_page_id = torrent_url.split("/torrent/")[1].split("/")[0]
-    driver = get_driver()
+def fetch_torrent_page(torrents, username, page_num, retries=0):
     try:
-        driver.get(torrent_url)
-        WebDriverWait(driver, 10).until(
-            EC.presence_of_element_located((By.CLASS_NAME, "list"))
-        )
-        soup = BeautifulSoup(driver.page_source, 'html.parser')
+        results = torrents.browse(username, page=page_num)
+        if not results or not results.get('items'):
+            logging.warning(f"No torrents found on page {page_num}")
+            return []
+        logging.info(f"Page {page_num}: Found {len(results['items'])} torrent links")
+        return [(item, page_num, index) for index, item in enumerate(results['items'])]
+    except Exception as e:
+        logging.error(f"Error fetching page {page_num}: {e}")
+        if retries < MAX_RETRIES:
+            logging.info(f"Retrying page {page_num} ({retries + 1}/{MAX_RETRIES}) after {RETRY_DELAY} seconds...")
+            time.sleep(RETRY_DELAY)
+            return fetch_torrent_page(torrents, username, page_num, retries + 1)
+        else:
+            logging.error(f"Max retries reached for page {page_num}. Skipping.")
+            return None
 
-        title_tag = soup.find("title")
-        title = title_tag.text.strip().replace(" | 1337x", "") if title_tag else "N/A"
-        magnet_tag = soup.find("a", href=lambda x: x and "magnet:?" in x)
-        magnet_link_full = magnet_tag["href"] if magnet_tag else "N/A"
-        magnet_link = magnet_link_full.split("&")[0] if magnet_link_full != "N/A" else "N/A"
+def process_torrent_item(item, page_num, index):
+    try:
+        sub_page_id = item.get('torrentId', 'N/A')
+        title = item.get('name', 'N/A')
+        file_size = item.get('size', 'N/A')
+        category = item.get('category', 'N/A')
+        magnet_link = item.get('magnetLink', 'N/A')
 
-        file_size = "N/A"
-        category = "N/A"
-        for ul in soup.find_all("ul", class_="list"):
-            for li in ul.find_all("li"):
-                if "Total size" in li.text:
-                    file_size = li.find("span").text.strip() if li.find("span") else "N/A"
-                elif "Category" in li.text:
-                    category = li.find("span").text.strip() if li.find("span") else "N/A"
-
-        logging.info(f"Sub-page data - page_num: {page_num}, id: {sub_page_id}, title: {title}")
-        driver.quit()
+        logging.info(f"Processed - page_num: {page_num}, id: {sub_page_id}, title: {title}")
         return {
             "page_number": page_num,
             "sub_page_id": sub_page_id,
@@ -159,17 +91,12 @@ def crawl_detail_page(torrent_url, page_num, index, retries=0):
             "index": index
         }
     except Exception as e:
-        logging.error(f"Error fetching detail page {torrent_url}: {e}")
-        driver.quit()
-        if retries < MAX_RETRIES:
-            logging.info(f"Retrying {torrent_url} ({retries + 1}/{MAX_RETRIES}) after {RETRY_DELAY} seconds...")
-            time.sleep(RETRY_DELAY)
-            return crawl_detail_page(torrent_url, page_num, index, retries + 1)
-        else:
-            logging.error(f"Max retries ({MAX_RETRIES}) reached for {torrent_url}. Terminating program.")
-            sys.exit(1)
+        logging.error(f"Error processing item {item}: {e}")
+        return None
 
 def crawl_1337x(username, start_page, end_page):
+    # 初始化 py1337x
+    torrents = Py1337x()
     csv_file = init_csv(username)
     existing_ids = load_existing_ids(csv_file)
     pbar = tqdm(range(start_page, end_page - 1, -1), desc="Crawling pages")
@@ -177,24 +104,23 @@ def crawl_1337x(username, start_page, end_page):
     consecutive_failures = 0
 
     for page_num in pbar:
-        soup = get_torrent_page(username, page_num)
-        if not soup:
-            consecutive_fail即将ures += 1
+        torrent_items = fetch_torrent_page(torrents, username, page_num)
+        if torrent_items is None:
+            consecutive_failures += 1
             if consecutive_failures >= MAX_CONSECUTIVE_FAILURES:
                 logging.error(f"Consecutive failures reached {MAX_CONSECUTIVE_FAILURES}. Terminating program.")
                 sys.exit(1)
             continue
+        elif not torrent_items:
+            consecutive_failures += 1
+            continue
         else:
             consecutive_failures = 0
 
-        torrent_links = extract_torrent_links(soup, page_num)
-        if not torrent_links:
-            logging.warning(f"No torrents found on page {page_num}")
-            continue
-
         results = []
         with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
-            futures = {executor.submit(crawl_detail_page, url, page_num, index): index for url, page_num, index in torrent_links}
+            futures = {executor.submit(process_torrent_item, item, page_num, index): index 
+                       for item, page_num, index in torrent_items}
             for future in as_completed(futures):
                 result = future.result()
                 if result and result["sub_page_id"] not in existing_ids:
@@ -214,7 +140,7 @@ def crawl_1337x(username, start_page, end_page):
                 git_sync_and_commit(csv_file, f"Update data for pages {page_num + COMMIT_INTERVAL - 1} to {page_num}")
 
         pbar.update(1)
-        time.sleep(3)
+        time.sleep(random.uniform(1, 3))  # 随机延迟避免反爬
 
     if page_count % COMMIT_INTERVAL != 0 and results:
         git_sync_and_commit(csv_file, f"Final update for pages {start_page} to {end_page}")
