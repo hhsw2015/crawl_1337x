@@ -1,4 +1,5 @@
-import requests
+from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
 from bs4 import BeautifulSoup
 import csv
 import time
@@ -9,7 +10,6 @@ import os
 import subprocess
 import logging
 import random
-import cloudscraper
 
 # 配置日志
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -19,16 +19,14 @@ USER_AGENTS = [
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.4430.212 Safari/537.36",
     "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/89.0.4389.82 Safari/537.36",
-    "Mozilla/5.0 (iPhone; CPU iPhone OS 14_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.0 Mobile/15E148 Safari/604.1",
 ]
 
-# 常量配置
 MAX_RETRIES = 3
 RETRY_DELAY = 5
 MAX_WORKERS = 10
-COMMIT_INTERVAL = 10  # 每 10 页提交一次
-MAX_CONSECUTIVE_FAILURES = 5  # 连续失败 5 次后终止
-BASE_URL = "https://1337x.st"  # 使用镜像站，可根据需要更改
+COMMIT_INTERVAL = 10
+MAX_CONSECUTIVE_FAILURES = 5
+BASE_URL = "https://1337x.st"  # 可替换为其他镜像站
 
 def init_csv(username):
     """初始化 CSV 文件，如果文件不存在则创建并写入表头"""
@@ -70,22 +68,32 @@ def git_sync_and_commit(csv_file, message):
         logging.error(f"Git error: {e.stderr}")
         raise
 
+def get_driver():
+    """初始化 headless Chrome 浏览器"""
+    chrome_options = Options()
+    chrome_options.add_argument("--headless")
+    chrome_options.add_argument("--no-sandbox")
+    chrome_options.add_argument("--disable-dev-shm-usage")
+    chrome_options.add_argument(f"user-agent={random.choice(USER_AGENTS)}")
+    driver = webdriver.Chrome(options=chrome_options)
+    return driver
+
 def get_torrent_page(username, page_num):
-    """获取指定用户和页数的种子列表页面"""
+    """使用 Selenium 获取页面"""
     url = f"{BASE_URL}/{username}-torrents/{page_num}/"
-    headers = {"User-Agent": random.choice(USER_AGENTS)}
-    proxies = {
-        "http": os.getenv("HTTP_PROXY"),
-        "https": os.getenv("HTTPS_PROXY")
-    }
-    scraper = cloudscraper.create_scraper()  # 支持 Cloudflare 绕过
+    driver = get_driver()
     for attempt in range(MAX_RETRIES):
         try:
-            response = scraper.get(url, headers=headers, timeout=10, proxies=proxies)
-            response.raise_for_status()
-            return BeautifulSoup(response.text, 'html.parser')
-        except requests.RequestException as e:
+            driver.get(url)
+            time.sleep(5)  # 等待页面加载和可能的 Cloudflare 验证
+            if "403" in driver.title or "Forbidden" in driver.title:
+                raise Exception("403 Forbidden encountered")
+            soup = BeautifulSoup(driver.page_source, 'html.parser')
+            driver.quit()
+            return soup
+        except Exception as e:
             logging.error(f"Error fetching page {url}: {e}")
+            driver.quit()
             if attempt < MAX_RETRIES - 1:
                 logging.info(f"Retrying {url} ({attempt + 1}/{MAX_RETRIES}) after {RETRY_DELAY} seconds...")
                 time.sleep(RETRY_DELAY)
@@ -108,18 +116,15 @@ def extract_torrent_links(soup, page_num):
     return torrent_links
 
 def crawl_detail_page(torrent_url, page_num, index, retries=0):
-    """爬取详细页面并提取所需信息"""
+    """使用 Selenium 爬取详细页面"""
     sub_page_id = torrent_url.split("/torrent/")[1].split("/")[0]
-    headers = {"User-Agent": random.choice(USER_AGENTS)}
-    proxies = {
-        "http": os.getenv("HTTP_PROXY"),
-        "https": os.getenv("HTTPS_PROXY")
-    }
-    scraper = cloudscraper.create_scraper()
+    driver = get_driver()
     try:
-        response = scraper.get(torrent_url, headers=headers, timeout=10, proxies=proxies)
-        response.raise_for_status()
-        soup = BeautifulSoup(response.text, 'html.parser')
+        driver.get(torrent_url)
+        time.sleep(5)  # 等待页面加载
+        if "403" in driver.title or "Forbidden" in driver.title:
+            raise Exception("403 Forbidden encountered")
+        soup = BeautifulSoup(driver.page_source, 'html.parser')
 
         title_tag = soup.find("title")
         title = title_tag.text.strip().replace(" | 1337x", "") if title_tag else "N/A"
@@ -137,6 +142,7 @@ def crawl_detail_page(torrent_url, page_num, index, retries=0):
                     category = li.find("span").text.strip() if li.find("span") else "N/A"
 
         logging.info(f"Sub-page data - page_num: {page_num}, id: {sub_page_id}, title: {title}")
+        driver.quit()
         return {
             "page_number": page_num,
             "sub_page_id": sub_page_id,
@@ -146,8 +152,9 @@ def crawl_detail_page(torrent_url, page_num, index, retries=0):
             "magnet_link": magnet_link,
             "index": index
         }
-    except requests.RequestException as e:
+    except Exception as e:
         logging.error(f"Error fetching detail page {torrent_url}: {e}")
+        driver.quit()
         if retries < MAX_RETRIES:
             logging.info(f"Retrying {torrent_url} ({retries + 1}/{MAX_RETRIES}) after {RETRY_DELAY} seconds...")
             time.sleep(RETRY_DELAY)
@@ -202,7 +209,7 @@ def crawl_1337x(username, start_page, end_page):
                 git_sync_and_commit(csv_file, f"Update data for pages {page_num + COMMIT_INTERVAL - 1} to {page_num}")
 
         pbar.update(1)
-        time.sleep(3)  # 增加请求间隔到 3 秒
+        time.sleep(3)
 
     if page_count % COMMIT_INTERVAL != 0 and results:
         git_sync_and_commit(csv_file, f"Final update for pages {start_page} to {end_page}")
