@@ -1,0 +1,55 @@
+name: Crawl 1337x Torrent Data
+
+on:
+  workflow_dispatch:
+    inputs:
+      username:
+        description: 'Username to crawl (e.g., mLisa)'
+        required: true
+        default: 'mLisa'
+      start_page:
+        description: 'Start page number (e.g., 100)'
+        required: true
+        default: '100'
+      end_page:
+        description: 'End page number (e.g., 1)'
+        required: true
+        default: '1'
+
+permissions:
+  contents: write  # 授予写权限以推送更改
+
+jobs:
+  crawl:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install requests beautifulsoup4 tqdm
+
+      - name: Run crawler
+        env:
+          USERNAME: ${{ github.event.inputs.username }}
+          START_PAGE: ${{ github.event.inputs.start_page }}
+          END_PAGE: ${{ github.event.inputs.end_page }}
+        run: |
+          python crawler.py
+
+      - name: Commit and push final changes
+        if: always()
+        run: |
+          git config --global user.name "hhsw2015"
+          git config --global user.email "hhsw2015@gmail.com"
+          git pull origin main  # 确保最后同步
+          git add "${{ github.event.inputs.username }}.csv"
+          git commit -m "Final commit after crawl" || echo "No changes to commit"
+          git push || echo "Push failed, possibly no changes or permission issue"
