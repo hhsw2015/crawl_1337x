@@ -14,7 +14,6 @@ import random
 # 配置日志
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-# 随机 User-Agent 列表
 USER_AGENTS = [
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.4430.212 Safari/537.36",
@@ -26,10 +25,9 @@ RETRY_DELAY = 5
 MAX_WORKERS = 10
 COMMIT_INTERVAL = 10
 MAX_CONSECUTIVE_FAILURES = 5
-BASE_URL = "https://1337x.st"  # 可替换为其他镜像站
+BASE_URL = "https://1337x.st"
 
 def init_csv(username):
-    """初始化 CSV 文件，如果文件不存在则创建并写入表头"""
     csv_file = f"{username}.csv"
     if not os.path.exists(csv_file):
         with open(csv_file, mode='w', newline='', encoding='utf-8') as file:
@@ -41,7 +39,6 @@ def init_csv(username):
     return csv_file
 
 def load_existing_ids(csv_file):
-    """加载 CSV 文件中已有的 sub_page_id"""
     existing_ids = set()
     if os.path.exists(csv_file):
         with open(csv_file, mode='r', encoding='utf-8') as file:
@@ -51,7 +48,6 @@ def load_existing_ids(csv_file):
     return existing_ids
 
 def git_sync_and_commit(csv_file, message):
-    """同步远程仓库代码并提交更改"""
     try:
         subprocess.run(["git", "config", "--global", "user.email", "hhsw2015@gmail.com"], check=True)
         subprocess.run(["git", "config", "--global", "user.name", "hhsw2015"], check=True)
@@ -69,7 +65,6 @@ def git_sync_and_commit(csv_file, message):
         raise
 
 def get_driver():
-    """初始化 headless Chrome 浏览器"""
     chrome_options = Options()
     chrome_options.add_argument("--headless")
     chrome_options.add_argument("--no-sandbox")
@@ -79,16 +74,20 @@ def get_driver():
     return driver
 
 def get_torrent_page(username, page_num):
-    """使用 Selenium 获取页面"""
     url = f"{BASE_URL}/{username}-torrents/{page_num}/"
     driver = get_driver()
     for attempt in range(MAX_RETRIES):
         try:
             driver.get(url)
-            time.sleep(5)  # 等待页面加载和可能的 Cloudflare 验证
+            time.sleep(5)  # 等待页面加载
             if "403" in driver.title or "Forbidden" in driver.title:
                 raise Exception("403 Forbidden encountered")
-            soup = BeautifulSoup(driver.page_source, 'html.parser')
+            html = driver.page_source
+            soup = BeautifulSoup(html, 'html.parser')
+            # 调试：保存页面内容
+            with open(f"debug_page_{page_num}.html", "w", encoding="utf-8") as f:
+                f.write(html)
+            logging.info(f"Saved debug HTML for page {page_num}")
             driver.quit()
             return soup
         except Exception as e:
@@ -102,26 +101,29 @@ def get_torrent_page(username, page_num):
                 return None
 
 def extract_torrent_links(soup, page_num):
-    """提取页面中所有 <tr> 元素的详细页链接，并保留顺序"""
     if not soup:
         return []
     
     torrent_links = []
-    for index, tr in enumerate(soup.find_all("tr")):
-        link_tag = tr.find("td", class_="coll-1 name").find_all("a")[-1] if tr.find("td", class_="coll-1 name") else None
-        if link_tag and link_tag.get("href"):
-            full_url = f"{BASE_URL}" + link_tag["href"]
-            torrent_links.append((full_url, page_num, index))
+    # 更新解析逻辑，适应可能的结构变化
+    table = soup.find("table", class_="table-list")
+    if table:
+        for index, tr in enumerate(table.find_all("tr")):
+            name_td = tr.find("td", class_="coll-1 name")
+            if name_td:
+                link_tag = name_td.find_all("a")[-1]
+                if link_tag and link_tag.get("href"):
+                    full_url = f"{BASE_URL}" + link_tag["href"]
+                    torrent_links.append((full_url, page_num, index))
     logging.info(f"Page {page_num}: Found {len(torrent_links)} torrent links")
     return torrent_links
 
 def crawl_detail_page(torrent_url, page_num, index, retries=0):
-    """使用 Selenium 爬取详细页面"""
     sub_page_id = torrent_url.split("/torrent/")[1].split("/")[0]
     driver = get_driver()
     try:
         driver.get(torrent_url)
-        time.sleep(5)  # 等待页面加载
+        time.sleep(5)
         if "403" in driver.title or "Forbidden" in driver.title:
             raise Exception("403 Forbidden encountered")
         soup = BeautifulSoup(driver.page_source, 'html.parser')
@@ -164,7 +166,6 @@ def crawl_detail_page(torrent_url, page_num, index, retries=0):
             sys.exit(1)
 
 def crawl_1337x(username, start_page, end_page):
-    """从指定起始页爬取到结束页"""
     csv_file = init_csv(username)
     existing_ids = load_existing_ids(csv_file)
     pbar = tqdm(range(start_page, end_page - 1, -1), desc="Crawling pages")
