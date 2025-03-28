@@ -1,5 +1,6 @@
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
@@ -72,7 +73,10 @@ def get_driver():
     chrome_options.add_argument("--no-sandbox")
     chrome_options.add_argument("--disable-dev-shm-usage")
     chrome_options.add_argument(f"user-agent={random.choice(USER_AGENTS)}")
-    driver = webdriver.Chrome(options=chrome_options)
+    # 显式指定 ChromeDriver 路径
+    service = Service(executable_path="/usr/local/bin/chromedriver")
+    driver = webdriver.Chrome(service=service, options=chrome_options)
+    logging.info("ChromeDriver initialized successfully")
     return driver
 
 def get_torrent_page(username, page_num):
@@ -81,7 +85,6 @@ def get_torrent_page(username, page_num):
     for attempt in range(MAX_RETRIES):
         try:
             driver.get(url)
-            # 等待页面加载完成，确保 table-list 出现
             WebDriverWait(driver, 10).until(
                 EC.presence_of_element_located((By.CLASS_NAME, "table-list"))
             )
@@ -176,7 +179,7 @@ def crawl_1337x(username, start_page, end_page):
     for page_num in pbar:
         soup = get_torrent_page(username, page_num)
         if not soup:
-            consecutive_failures += 1
+            consecutive_fail即将ures += 1
             if consecutive_failures >= MAX_CONSECUTIVE_FAILURES:
                 logging.error(f"Consecutive failures reached {MAX_CONSECUTIVE_FAILURES}. Terminating program.")
                 sys.exit(1)
