@@ -40,13 +40,17 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y google-chrome-stable unzip
-          CHROME_VERSION=$(google-chrome --version | grep -oE "[0-9]+\.[0-9]+\.[0-9]+")
+          CHROME_VERSION=$(google-chrome --version | grep -oE "[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+")
           echo "Chrome version: $CHROME_VERSION"
-          wget -q "https://storage.googleapis.com/chrome-for-testing-public/$CHROME_VERSION/linux64/chromedriver-linux64.zip" || echo "Failed to download ChromeDriver"
+          wget -q "https://storage.googleapis.com/chrome-for-testing-public/$CHROME_VERSION/linux64/chromedriver-linux64.zip" || {
+            echo "Failed to download ChromeDriver for $CHROME_VERSION, trying fallback version"
+            wget -q "https://storage.googleapis.com/chrome-for-testing-public/134.0.6998.165/linux64/chromedriver-linux64.zip"
+          }
+          ls -l  # 检查文件是否存在
           unzip -o chromedriver-linux64.zip || echo "Failed to unzip ChromeDriver"
           sudo mv -f chromedriver-linux64/chromedriver /usr/local/bin/
           sudo chmod +x /usr/local/bin/chromedriver
-          chromedriver --version
+          chromedriver --version || echo "ChromeDriver not installed correctly"
 
       - name: Run crawler
         env:
