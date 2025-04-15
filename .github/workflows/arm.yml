@@ -22,8 +22,8 @@ jobs:
       - name: Set up JDK
         uses: actions/setup-java@v3
         with:
-          distribution: 'temurin' # 修复：添加发行版
-          java-version: '17'
+          distribution: 'temurin'
+          java-version: '17.0.8' # 明确指定 Java 17 的版本
           java-package: 'jdk'
           check-latest: false
           server-id: 'github'
@@ -34,7 +34,6 @@ jobs:
       - name: Verify Java Installation
         run: java -version
         shell: pwsh
-
       - name: Install Android SDK
         run: |
           curl -o sdk-tools.zip https://dl.google.com/android/repository/commandlinetools-win-9477386_latest.zip
