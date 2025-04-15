@@ -34,31 +34,41 @@ jobs:
       - name: Verify Java Installation
         run: java -version
         shell: pwsh
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
-        with:
-          sdk-version: '33'
-          components: 'platform-tools,platforms;android-33,emulator,system-images;android-33;google_apis;arm64-v8a'
-
-      - name: Verify Android SDK
+      - name: Install Android SDK Components
         run: |
+          $env:ANDROID_HOME = "C:\Android\android-sdk"
+          mkdir $env:ANDROID_HOME -ErrorAction SilentlyContinue
+          # 下载 platform-tools
+          curl -L -o platform-tools.zip https://dl.google.com/android/repository/platform-tools_r35.0.2-windows.zip
+          unzip platform-tools.zip -d $env:ANDROID_HOME
+          # 下载 system-images（若需模拟器）
+          curl -L -o system-image.zip https://dl.google.com/android/repository/sys-img/google_apis/arm64-v8a-34_r04.zip
+          mkdir $env:ANDROID_HOME\system-images\android-34\google_apis -ErrorAction SilentlyContinue
+          unzip system-image.zip -d $env:ANDROID_HOME\system-images\android-34\google_apis
+          # 下载 emulator（若需模拟器）
+          curl -L -o emulator.zip https://dl.google.com/android/repository/emulator-windows_arm64-35.1.18.zip
+          unzip emulator.zip -d $env:ANDROID_HOME\emulator
+          # 设置 PATH
+          $env:PATH = "$env:ANDROID_HOME\platform-tools;$env:ANDROID_HOME\emulator;$env:PATH"
+          # 验证
           adb version
-          $env:ANDROID_HOME/tools/bin/sdkmanager.bat --list
+          emulator -version
         shell: pwsh
-        env:
-          ANDROID_HOME: ${{ github.workspace }}/android-sdk
 
       - name: Create AVD
         run: |
-          echo "no" | $env:ANDROID_HOME/tools/bin/avdmanager.bat create avd -n test-avd -k "system-images;android-33;google_apis;arm64-v8a"
+          # 下载命令行工具（仅用于 avdmanager）
+          curl -L -o cmdline-tools.zip https://dl.google.com/android/repository/commandlinetools-win-12073019_latest.zip
+          unzip cmdline-tools.zip -d $env:ANDROID_HOME\cmdline-tools
+          echo "no" | $env:ANDROID_HOME\cmdline-tools\cmdline-tools\bin\avdmanager.bat create avd -n test-avd -k "system-images;android-34;google_apis;arm64-v8a"
         shell: pwsh
         env:
-          ANDROID_HOME: ${{ github.workspace }}/android-sdk
+          ANDROID_HOME: C:\Android\android-sdk
 
       - name: Start Emulator
         run: |
-          $env:ANDROID_HOME/emulator/emulator -avd test-avd -no-window -no-audio
+          $env:ANDROID_HOME\emulator\emulator -avd test-avd -no-window -no-audio
         shell: pwsh
         env:
-          ANDROID_HOME: ${{ github.workspace }}/android-sdk
-          ANDROID_AVD_HOME: ${{ github.workspace }}/.android/avd
+          ANDROID_HOME: C:\Android\android-sdk
+          ANDROID_AVD_HOME: C:\Android\.android\avd
