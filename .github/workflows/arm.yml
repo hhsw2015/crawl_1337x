@@ -6,7 +6,7 @@ on:
 
 jobs:
   check-virtualization:
-    runs-on: windows-arm64 # 使用 Windows ARM64 运行器
+    runs-on: windows-11-arm # 使用 Windows ARM64 运行器
     steps:
       - name: Check system info
         run: systeminfo
