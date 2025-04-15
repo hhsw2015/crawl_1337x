@@ -20,10 +20,10 @@ jobs:
           Get-WindowsOptionalFeature -Online | Where-Object { $_.FeatureName -like "*Hyper-V*" }
 
       - name: Set up JDK
-        uses: actions/setup-java@v3
+        uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
-          java-version: '17.0.8' # 明确指定 Java 17 的版本
+          java-version: '21' # 使用 Java 21
           java-package: 'jdk'
           check-latest: false
           server-id: 'github'
