@@ -72,5 +72,4 @@ jobs:
         shell: pwsh
         env:
           ANDROID_HOME: C:\Android\android-sdk
-          ANDROID_AVD_HOME
           ANDROID_AVD_HOME: C:\Android\.android\avd
