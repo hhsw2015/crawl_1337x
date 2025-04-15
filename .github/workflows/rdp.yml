@@ -1,0 +1,30 @@
+name: Disala RDP
+
+on: workflow_dispatch
+
+jobs:
+  build:
+    runs-on: runs-on: windows-11-arm
+
+    steps:
+    - name: Download Essentials
+      run: |
+          choco install ngrok -y
+          choco install telegram -y         
+          choco install winrar -y
+    - name: Connecting To Ngrok
+      run: ngrok config add-authtoken $Env:NGROK_AUTH_TOKEN
+      env:
+        NGROK_AUTH_TOKEN: ${{ secrets.NGROK_AUTH_TOKEN }}
+    - name: Enable Permissions
+      run: |
+          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server'-name "fDenyTSConnections" -Value 0
+          Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
+          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -name "UserAuthentication" -Value 1
+          Set-LocalUser -Name "runneradmin" -Password (ConvertTo-SecureString -AsPlainText "@#Disala123456" -Force)
+    - name: RDP Log In Credentials 
+      run: |
+          Start-Process ngrok -ArgumentList "tcp --region=in 3389" -NoNewWindow; $ngrokRunning = $false; $maxAttempts = 1; $attempts = 0; while (!$ngrokRunning -and $attempts -lt $maxAttempts) {$ngrokRunning = (Get-Process ngrok -ErrorAction SilentlyContinue) -ne $null; $attempts++ }; if ($ngrokRunning) { $ngrokUrl = (Invoke-RestMethod -Uri "http://localhost:4040/api/tunnels" | Select-Object -ExpandProperty tunnels)[0].public_url; Write-Host "IP: $ngrokUrl" } else { Write-Host "Failed to retrieve NGROK authtoken - check your authtoken again" }
+          Write-Host "Username: runneradmin"
+          Write-Host "Password: @#Disala123456"
+          Start-Sleep -Seconds 3600
