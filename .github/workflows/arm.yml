@@ -57,10 +57,11 @@ jobs:
 
       - name: Create AVD
         run: |
-          # 下载命令行工具（仅用于 avdmanager）
+          # 下载命令行工具
           curl -L -o cmdline-tools.zip https://dl.google.com/android/repository/commandlinetools-win-12073019_latest.zip
           unzip cmdline-tools.zip -d $env:ANDROID_HOME\cmdline-tools
-          echo "no" | $env:ANDROID_HOME\cmdline-tools\cmdline-tools\bin\avdmanager.bat create avd -n test-avd -k "system-images;android-34;google_apis;arm64-v8a"
+          # 创建 AVD
+          & "$env:ANDROID_HOME\cmdline-tools\cmdline-tools\bin\avdmanager.bat" create avd -n test-avd -k "system-images;android-34;google_apis;arm64-v8a" --force
         shell: pwsh
         env:
           ANDROID_HOME: C:\Android\android-sdk
@@ -71,4 +72,5 @@ jobs:
         shell: pwsh
         env:
           ANDROID_HOME: C:\Android\android-sdk
+          ANDROID_AVD_HOME
           ANDROID_AVD_HOME: C:\Android\.android\avd
