@@ -39,7 +39,10 @@ jobs:
           curl -o sdk-tools.zip https://dl.google.com/android/repository/commandlinetools-win-9477386_latest.zip
           unzip sdk-tools.zip -d android-sdk
           $env:ANDROID_HOME = "$PWD/android-sdk"
-          yes | ./android-sdk/cmdline-tools/bin/sdkmanager.bat --sdk_root=$env:ANDROID_HOME "platform-tools" "platforms;android-30" "emulator" "system-images;android-30;google_apis;arm64-v8a"
+          # 预接受许可
+          ./android-sdk/cmdline-tools/bin/sdkmanager.bat --sdk_root=$env:ANDROID_HOME --licenses
+          # 安装组件
+          ./android-sdk/cmdline-tools/bin/sdkmanager.bat --sdk_root=$env:ANDROID_HOME "platform-tools" "platforms;android-30" "emulator" "system-images;android-30;google_apis;arm64-v8a"
         shell: pwsh
 
       - name: Create AVD
@@ -54,5 +57,5 @@ jobs:
           $env:ANDROID_HOME/emulator/emulator -avd test-avd -no-window -no-audio
         shell: pwsh
         env:
-          ANDROID_HOME: ${{ github.workspace }}/android-sdk
+          ANDROID_HOME: ${{ github.workflow }}/android-sdk
           ANDROID_AVD_HOME: ${{ github.workspace }}/.android/avd
