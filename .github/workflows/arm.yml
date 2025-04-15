@@ -36,18 +36,24 @@ jobs:
         shell: pwsh
       - name: Install Android SDK
         run: |
-          curl -o sdk-tools.zip https://dl.google.com/android/repository/commandlinetools-win-9477386_latest.zip
+          # 下载最新命令行工具
+          curl -o sdk-tools.zip https://dl.google.com/android/repository/commandlinetools-win-11076708_latest.zip
           unzip sdk-tools.zip -d android-sdk
           $env:ANDROID_HOME = "$PWD/android-sdk"
-          # 预接受许可
-          ./android-sdk/cmdline-tools/bin/sdkmanager.bat --sdk_root=$env:ANDROID_HOME --licenses
+          $env:PATH = "$env:ANDROID_HOME/cmdline-tools/bin;$env:PATH"
+          # 清理缓存
+          Remove-Item -Recurse -Force "$env:ANDROID_HOME/.android/cache" -ErrorAction SilentlyContinue
+          # 接受许可
+          echo "y" | ./android-sdk/cmdline-tools/bin/sdkmanager.bat --sdk_root=$env:ANDROID_HOME --licenses
+          # 检查可用包
+          ./android-sdk/cmdline-tools/bin/sdkmanager.bat --sdk_root=$env:ANDROID_HOME --list
           # 安装组件
-          ./android-sdk/cmdline-tools/bin/sdkmanager.bat --sdk_root=$env:ANDROID_HOME "platform-tools" "platforms;android-30" "emulator" "system-images;android-30;google_apis;arm64-v8a"
+          ./android-sdk/cmdline-tools/bin/sdkmanager.bat --sdk_root=$env:ANDROID_HOME "platform-tools" "platforms;android-33" "emulator" "system-images;android-33;google_apis;arm64-v8a"
         shell: pwsh
 
       - name: Create AVD
         run: |
-          echo "no" | ./android-sdk/cmdline-tools/bin/avdmanager.bat create avd -n test-avd -k "system-images;android-30;google_apis;arm64-v8a"
+          echo "no" | ./android-sdk/cmdline-tools/bin/avdmanager.bat create avd -n test-avd -k "system-images;android-33;google_apis;arm64-v8a"
         shell: pwsh
         env:
           ANDROID_HOME: ${{ github.workspace }}/android-sdk
@@ -57,5 +63,5 @@ jobs:
           $env:ANDROID_HOME/emulator/emulator -avd test-avd -no-window -no-audio
         shell: pwsh
         env:
-          ANDROID_HOME: ${{ github.workflow }}/android-sdk
+          ANDROID_HOME: ${{ github.workspace }}/android-sdk
           ANDROID_AVD_HOME: ${{ github.workspace }}/.android/avd
