@@ -1,6 +1,5 @@
 name: Check Virtualization Support
 
-# 定义触发方式
 on:
   workflow_dispatch: # 手动触发
 
@@ -23,7 +22,7 @@ jobs:
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
-          java-version: '21' # 使用 Java 21
+          java-version: '21'
           java-package: 'jdk'
           check-latest: false
           server-id: 'github'
@@ -34,36 +33,45 @@ jobs:
       - name: Verify Java Installation
         run: java -version
         shell: pwsh
+
       - name: Install Android SDK Components
         run: |
-          $env:ANDROID_HOME = "C:\Android\android-sdk"
+          $env:ANDROID_HOME = "C:/Android/android-sdk"
           mkdir $env:ANDROID_HOME -ErrorAction SilentlyContinue
           # 下载 platform-tools
           curl -L -o platform-tools.zip https://dl.google.com/android/repository/platform-tools_r35.0.2-windows.zip
+          if (Test-Path platform-tools.zip -and (Get-Item platform-tools.zip).Length -gt 5000000) { Write-Output "Platform tools downloaded"; } else { Write-Error "Platform tools download failed"; exit 1 }
           unzip platform-tools.zip -d $env:ANDROID_HOME
-          # 下载 system-images（若需模拟器）
+          # 下载系统镜像
           curl -L -o system-image.zip https://dl.google.com/android/repository/sys-img/google_apis/arm64-v8a-34_r04.zip
-          mkdir $env:ANDROID_HOME\system-images\android-34\google_apis -ErrorAction SilentlyContinue
-          unzip system-image.zip -d $env:ANDROID_HOME\system-images\android-34\google_apis
-          # 下载 emulator（若需模拟器）
+          if (Test-Path system-image.zip -and (Get-Item system-image.zip).Length -gt 100000000) { Write-Output "System image downloaded"; } else { Write-Error "System image download failed"; exit 1 }
+          mkdir $env:ANDROID_HOME/system-images/android-34/google_apis/arm64-v8a -ErrorAction SilentlyContinue
+          unzip system-image.zip -d $env:ANDROID_HOME/system-images/android-34/google_apis/arm64-v8a
+          # 下载 emulator
           curl -L -o emulator.zip https://dl.google.com/android/repository/emulator-windows_arm64-35.1.18.zip
-          unzip emulator.zip -d $env:ANDROID_HOME\emulator
+          if (Test-Path emulator.zip -and (Get-Item emulator.zip).Length -gt 50000000) { Write-Output "Emulator downloaded"; } else { Write-Error "Emulator download failed"; exit 1 }
+          unzip emulator.zip -d $env:ANDROID_HOME/emulator
           # 设置 PATH
-          $env:PATH = "$env:ANDROID_HOME\platform-tools;$env:ANDROID_HOME\emulator;$env:PATH"
+          $env:PATH = "$env:ANDROID_HOME/platform-tools;$env:ANDROID_HOME/emulator;$env:PATH"
           # 验证
           adb version
           emulator -version
         shell: pwsh
-      
+
       - name: Create AVD
         run: |
+          $env:ANDROID_HOME = "C:/Android/android-sdk"
+          $env:ANDROID_AVD_HOME = "C:/Android/.android/avd"
+          # 初始化 AVD 目录
+          mkdir $env:ANDROID_AVD_HOME -ErrorAction SilentlyContinue
           # 下载命令行工具
           curl -L -o cmdline-tools.zip https://dl.google.com/android/repository/commandlinetools-win-13114758_latest.zip
-          if (Test-Path cmdline-tools.zip) { Write-Output "Cmdline tools downloaded"; } else { Write-Error "Cmdline tools download failed"; exit 1 }
+          if (Test-Path cmdline-tools.zip -and (Get-Item cmdline-tools.zip).Length -gt 10000000) { Write-Output "Cmdline tools downloaded"; } else { Write-Error "Cmdline tools download failed"; exit 1 }
           unzip cmdline-tools.zip -d $env:ANDROID_HOME/cmdline-tools
-          # 使用 sdkmanager 安装系统镜像（可选）
-          & "$env:ANDROID_HOME/cmdline-tools/cmdline-tools/bin/sdkmanager.bat" "system-images;android-34;google_apis;arm64-v8a"
-          # 列出可用镜像以便调试
+          # 验证命令行工具
+          dir $env:ANDROID_HOME/cmdline-tools/cmdline-tools/bin/avdmanager.bat
+          & "$env:ANDROID_HOME/cmdline-tools/cmdline-tools/bin/avdmanager.bat" --version
+          # 列出可用镜像和设备
           & "$env:ANDROID_HOME/cmdline-tools/cmdline-tools/bin/avdmanager.bat" list
           # 检查系统镜像目录
           dir $env:ANDROID_HOME/system-images/android-34/google_apis/arm64-v8a
@@ -75,10 +83,11 @@ jobs:
         env:
           ANDROID_HOME: C:/Android/android-sdk
           ANDROID_AVD_HOME: C:/Android/.android/avd
+
       - name: Start Emulator
         run: |
-          $env:ANDROID_HOME\emulator\emulator -avd test-avd -no-window -no-audio
+          $env:ANDROID_HOME/emulator/emulator -avd test-avd -no-window -no-audio
         shell: pwsh
         env:
-          ANDROID_HOME: C:\Android\android-sdk
-          ANDROID_AVD_HOME: C:\Android\.android\avd
+          ANDROID_HOME: C:/Android/android-sdk
+          ANDROID_AVD_HOME: C:/Android/.android/avd
