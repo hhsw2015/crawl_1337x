@@ -36,7 +36,7 @@ jobs:
         shell: pwsh
       - name: Install Android SDK
         run: |
-          # 下载最新命令行工具
+          # 下载最新命令行工具（需替换为实际 URL）
           curl -o sdk-tools.zip https://dl.google.com/android/repository/commandlinetools-win-11076708_latest.zip
           unzip sdk-tools.zip -d android-sdk
           $env:ANDROID_HOME = "$PWD/android-sdk"
@@ -47,8 +47,12 @@ jobs:
           echo "y" | ./android-sdk/cmdline-tools/bin/sdkmanager.bat --sdk_root=$env:ANDROID_HOME --licenses
           # 检查可用包
           ./android-sdk/cmdline-tools/bin/sdkmanager.bat --sdk_root=$env:ANDROID_HOME --list
-          # 安装组件
-          ./android-sdk/cmdline-tools/bin/sdkmanager.bat --sdk_root=$env:ANDROID_HOME "platform-tools" "platforms;android-33" "emulator" "system-images;android-33;google_apis;arm64-v8a"
+          # 安装组件（带重试）
+          for ($i = 1; $i -le 3; $i++) {
+            ./android-sdk/cmdline-tools/bin/sdkmanager.bat --sdk_root=$env:ANDROID_HOME --channel=0 "platform-tools" "platforms;android-33" "emulator" "system-images;android-33;google_apis;arm64-v8a" && break
+            echo "Retry $i failed, waiting 10s..."
+            Start-Sleep -Seconds 10
+          }
         shell: pwsh
 
       - name: Create AVD
@@ -64,4 +68,5 @@ jobs:
         shell: pwsh
         env:
           ANDROID_HOME: ${{ github.workspace }}/android-sdk
+          ANDROID_AVD_HOME: ${{ github.workspace }}/.android/avd
           ANDROID_AVD_HOME: ${{ github.workspace }}/.android/avd
