@@ -60,21 +60,22 @@ jobs:
       
       - name: Create AVD
         run: |
-          # 下载命令行工具
-          curl -L -o cmdline-tools.zip https://dl.google.com/android/repository/commandlinetools-win-13114758_latest.zip
+          # 下载命令行工具（更新到最新版本）
+          curl -L -o cmdline-tools.zip https://dl.google.com/android/repository/commandlinetools-win-13580629_latest.zip
           if (Test-Path cmdline-tools.zip) { Write-Output "Cmdline tools downloaded"; } else { Write-Error "Cmdline tools download failed"; exit 1 }
           unzip cmdline-tools.zip -d $env:ANDROID_HOME/cmdline-tools
-          # 使用 sdkmanager 安装系统镜像（可选）
-          & "$env:ANDROID_HOME/cmdline-tools/cmdline-tools/bin/sdkmanager.bat" "system-images;android-34;google_apis;arm64-v8a"
-          # 列出可用镜像以便调试
-          & "$env:ANDROID_HOME/cmdline-tools/cmdline-tools/bin/avdmanager.bat" list
+          # 列出可用设备以便调试
+          & "$env:ANDROID_HOME/cmdline-tools/cmdline-tools/bin/avdmanager.bat" list device
           # 检查系统镜像目录
           dir $env:ANDROID_HOME/system-images/android-34/google_apis/arm64-v8a
-          # 创建 AVD
-          & "$env:ANDROID_HOME/cmdline-tools/cmdline-tools/bin/avdmanager.bat" create avd -n test-avd -k "system-images;android-34;google_apis;arm64-v8a" --force
+          # 创建 AVD，指定设备
+          echo no | & "$env:ANDROID_HOME/cmdline-tools/cmdline-tools/bin/avdmanager.bat" create avd -n test-avd -k "system-images;android-34;google_apis;arm64-v8a" -d pixel_6 --force
+          # 验证 AVD 创建
+          dir $env:ANDROID_AVD_HOME/test-avd.avd
         shell: pwsh
         env:
           ANDROID_HOME: C:/Android/android-sdk
+          ANDROID_AVD_HOME: C:/Android/.android/avd
       - name: Start Emulator
         run: |
           $env:ANDROID_HOME\emulator\emulator -avd test-avd -no-window -no-audio
