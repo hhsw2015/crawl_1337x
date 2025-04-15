@@ -69,4 +69,3 @@ jobs:
         env:
           ANDROID_HOME: ${{ github.workspace }}/android-sdk
           ANDROID_AVD_HOME: ${{ github.workspace }}/.android/avd
-          ANDROID_AVD_HOME: ${{ github.workspace }}/.android/avd
