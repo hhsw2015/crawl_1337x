@@ -36,35 +36,37 @@ jobs:
         shell: pwsh
       - name: Install Android SDK Components
         run: |
-          $env:ANDROID_HOME = "C:\Android\android-sdk"
+          $env:ANDROID_HOME = "C:/Android/android-sdk"
           mkdir $env:ANDROID_HOME -ErrorAction SilentlyContinue
-          # 下载 platform-tools
+          # Download platform-tools
           curl -L -o platform-tools.zip https://dl.google.com/android/repository/platform-tools_r35.0.2-windows.zip
           unzip platform-tools.zip -d $env:ANDROID_HOME
-          # 下载 system-images（若需模拟器）
+          # Download system-images
           curl -L -o system-image.zip https://dl.google.com/android/repository/sys-img/google_apis/arm64-v8a-34_r04.zip
-          mkdir $env:ANDROID_HOME\system-images\android-34\google_apis -ErrorAction SilentlyContinue
-          unzip system-image.zip -d $env:ANDROID_HOME\system-images\android-34\google_apis
-          # 下载 emulator（若需模拟器）
+          mkdir $env:ANDROID_HOME/system-images/android-34/google_apis/arm64-v8a -ErrorAction SilentlyContinue
+          unzip system-image.zip -d $env:ANDROID_HOME/system-images/android-34/google_apis/arm64-v8a
+          # Download emulator
           curl -L -o emulator.zip https://dl.google.com/android/repository/emulator-windows_arm64-35.1.18.zip
-          unzip emulator.zip -d $env:ANDROID_HOME\emulator
-          # 设置 PATH
-          $env:PATH = "$env:ANDROID_HOME\platform-tools;$env:ANDROID_HOME\emulator;$env:PATH"
-          # 验证
+          unzip emulator.zip -d $env:ANDROID_HOME/emulator
+          # Set PATH
+          $env:PATH = "$env:ANDROID_HOME/platform-tools;$env:ANDROID_HOME/emulator;$env:PATH"
+          # Verify
           adb version
           emulator -version
         shell: pwsh
-
+      
       - name: Create AVD
         run: |
-          # 下载命令行工具
+          # Download command-line tools
           curl -L -o cmdline-tools.zip https://dl.google.com/android/repository/commandlinetools-win-13114758_latest.zip
-          unzip cmdline-tools.zip -d $env:ANDROID_HOME\cmdline-tools
-          # 创建 AVD
-          & "$env:ANDROID_HOME\cmdline-tools\cmdline-tools\bin\avdmanager.bat" create avd -n test-avd -k "system-images;android-34;google_apis;arm64-v8a" --force
+          unzip cmdline-tools.zip -d $env:ANDROID_HOME/cmdline-tools
+          # List available images for debugging
+          & "$env:ANDROID_HOME/cmdline-tools/cmdline-tools/bin/avdmanager.bat" list
+          # Create AVD
+          & "$env:ANDROID_HOME/cmdline-tools/cmdline-tools/bin/avdmanager.bat" create avd -n test-avd -k "system-images;android-34;google_apis;arm64-v8a" --force --verbose
         shell: pwsh
         env:
-          ANDROID_HOME: C:\Android\android-sdk
+          ANDROID_HOME: C:/Android/android-sdk
 
       - name: Start Emulator
         run: |
