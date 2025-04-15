@@ -8,12 +8,41 @@ jobs:
   check-virtualization:
     runs-on: windows-11-arm # 使用 Windows ARM64 运行器
     steps:
-      - name: Check system info
+      - name: Check System Info
         run: systeminfo
-        shell: cmd # 使用 cmd 执行 systeminfo
+        shell: cmd
 
-      - name: Check virtualization with PowerShell
+      - name: Check Virtualization with PowerShell
         shell: pwsh
         run: |
           Get-ComputerInfo | Select-Object -Property WindowsProductName, HyperVisorPresent
           Get-CimInstance -ClassName Win32_Processor | Select-Object -Property VirtualizationFirmwareEnabled, VMMonitorModeExtensions
+          Get-WindowsOptionalFeature -Online | Where-Object { $_.FeatureName -like "*Hyper-V*" }
+
+      - name: Set up JDK
+        uses: actions/setup-java@v3
+        with:
+          java-version: '17'
+
+      - name: Install Android SDK
+        run: |
+          curl -o sdk-tools.zip https://dl.google.com/android/repository/commandlinetools-win-9477386_latest.zip
+          unzip sdk-tools.zip -d android-sdk
+          $env:ANDROID_HOME = "$PWD/android-sdk"
+          yes | ./android-sdk/cmdline-tools/bin/sdkmanager.bat --sdk_root=$env:ANDROID_HOME "platform-tools" "platforms;android-30" "emulator" "system-images;android-30;google_apis;arm64-v8a"
+        shell: pwsh
+
+      - name: Create AVD
+        run: |
+          echo "no" | ./android-sdk/cmdline-tools/bin/avdmanager.bat create avd -n test-avd -k "system-images;android-30;google_apis;arm64-v8a"
+        shell: pwsh
+        env:
+          ANDROID_HOME: ${{ github.workspace }}/android-sdk
+
+      - name: Start Emulator
+        run: |
+          $env:ANDROID_HOME/emulator/emulator -avd test-avd -no-window -no-audio
+        shell: pwsh
+        env:
+          ANDROID_HOME: ${{ github.workspace }}/android-sdk
+          ANDROID_AVD_HOME: ${{ github.workspace }}/.android/avd
