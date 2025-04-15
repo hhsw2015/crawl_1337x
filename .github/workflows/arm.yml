@@ -34,30 +34,23 @@ jobs:
       - name: Verify Java Installation
         run: java -version
         shell: pwsh
-      - name: Install Android SDK
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          sdk-version: '33'
+          components: 'platform-tools,platforms;android-33,emulator,system-images;android-33;google_apis;arm64-v8a'
+
+      - name: Verify Android SDK
         run: |
-          # 下载最新命令行工具（需替换为实际 URL）
-          curl -o sdk-tools.zip https://dl.google.com/android/repository/commandlinetools-win-11076708_latest.zip
-          unzip sdk-tools.zip -d android-sdk
-          $env:ANDROID_HOME = "$PWD/android-sdk"
-          $env:PATH = "$env:ANDROID_HOME/cmdline-tools/bin;$env:PATH"
-          # 清理缓存
-          Remove-Item -Recurse -Force "$env:ANDROID_HOME/.android/cache" -ErrorAction SilentlyContinue
-          # 接受许可
-          echo "y" | ./android-sdk/cmdline-tools/bin/sdkmanager.bat --sdk_root=$env:ANDROID_HOME --licenses
-          # 检查可用包
-          ./android-sdk/cmdline-tools/bin/sdkmanager.bat --sdk_root=$env:ANDROID_HOME --list
-          # 安装组件（带重试）
-          for ($i = 1; $i -le 3; $i++) {
-            ./android-sdk/cmdline-tools/bin/sdkmanager.bat --sdk_root=$env:ANDROID_HOME --channel=0 "platform-tools" "platforms;android-33" "emulator" "system-images;android-33;google_apis;arm64-v8a" && break
-            echo "Retry $i failed, waiting 10s..."
-            Start-Sleep -Seconds 10
-          }
+          adb version
+          $env:ANDROID_HOME/tools/bin/sdkmanager.bat --list
         shell: pwsh
+        env:
+          ANDROID_HOME: ${{ github.workspace }}/android-sdk
 
       - name: Create AVD
         run: |
-          echo "no" | ./android-sdk/cmdline-tools/bin/avdmanager.bat create avd -n test-avd -k "system-images;android-33;google_apis;arm64-v8a"
+          echo "no" | $env:ANDROID_HOME/tools/bin/avdmanager.bat create avd -n test-avd -k "system-images;android-33;google_apis;arm64-v8a"
         shell: pwsh
         env:
           ANDROID_HOME: ${{ github.workspace }}/android-sdk
