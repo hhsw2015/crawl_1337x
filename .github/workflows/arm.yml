@@ -57,13 +57,13 @@ jobs:
       
       - name: Create AVD
         run: |
-          # Download command-line tools
+          # 下载命令行工具
           curl -L -o cmdline-tools.zip https://dl.google.com/android/repository/commandlinetools-win-13114758_latest.zip
-          unzip cmdline-tools.zip -d $env:ANDROID_HOME/cmdline-tools
-          # List available images for debugging
-          & "$env:ANDROID_HOME/cmdline-tools/cmdline-tools/bin/avdmanager.bat" list
-          # Create AVD
-          & "$env:ANDROID_HOME/cmdline-tools/cmdline-tools/bin/avdmanager.bat" create avd -n test-avd -k "system-images;android-34;google_apis;arm64-v8a" --force --verbose
+          unzip cmdline-tools.zip -d $env:ANDROID_HOME\cmdline-tools
+          # 列出可用镜像以便调试
+          & "$env:ANDROID_HOME\cmdline-tools\cmdline-tools\bin\avdmanager.bat" list
+          # 创建 AVD
+          & "$env:ANDROID_HOME\cmdline-tools\cmdline-tools\bin\avdmanager.bat" --verbose create avd -n test-avd -k "system-images;android-34;google_apis;arm64-v8a" --force
         shell: pwsh
         env:
           ANDROID_HOME: C:/Android/android-sdk
