@@ -22,7 +22,18 @@ jobs:
       - name: Set up JDK
         uses: actions/setup-java@v3
         with:
+          distribution: 'temurin' # 修复：添加发行版
           java-version: '17'
+          java-package: 'jdk'
+          check-latest: false
+          server-id: 'github'
+          server-username: ${{ github.actor }}
+          server-password: ${{ github.token }}
+          overwrite-settings: true
+
+      - name: Verify Java Installation
+        run: java -version
+        shell: pwsh
 
       - name: Install Android SDK
         run: |
