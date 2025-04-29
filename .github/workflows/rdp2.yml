@@ -4,7 +4,7 @@ on: workflow_dispatch
 
 jobs:
   build:
-    runs-on: windows-latest
+    runs-on: windows-11-arm
 
     steps:
     - name: Install Tailscale
@@ -35,13 +35,10 @@ jobs:
           # Enable RDP
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
           Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
-          # Disable NLA for simpler client connection
-          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 0
+          # Enable NLA (match Ngrok script)
+          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 1
           # Set password
           Set-LocalUser -Name "runneradmin" -Password (ConvertTo-SecureString -AsPlainText "${{ secrets.RDP_PASSWORD }}" -Force)
-          # Start RDP service
-          Start-Service -Name TermService
-          Set-Service -Name TermService -StartupType Automatic
           # Verify RDP service
           $rdpService = Get-Service -Name TermService
           Write-Host "RDP Service Status: $($rdpService.Status)"
@@ -53,9 +50,9 @@ jobs:
               Write-Error "RDP Firewall Rule not enabled"
               exit 1
           }
-          # Verify port 3389
-          $portTest = Test-NetConnection -ComputerName localhost -Port 3389 -ErrorAction SilentlyContinue
-          Write-Host "RDP Port 3389 Status: $($portTest.TcpTestSucceeded)"
+          # Check 3389 port listening
+          $netstat = netstat -an | findstr :3389
+          Write-Host "Netstat 3389: $netstat"
       shell: pwsh
 
     - name: Configure and Start Tailscale
@@ -76,11 +73,11 @@ jobs:
           # Wait for Tailscale to connect
           Start-Sleep -Seconds 30
           # Get Tailscale IP to verify connection
-          $tailscaleIpRaw = & $tailscaleExe ip --4
-          Write-Host "Raw Tailscale IP output: $tailscaleIpRaw"
-          $tailscaleIp = $tailscaleIpRaw | Select-Object -First 1 | ForEach-Object { $_.Trim() }
+          $tailscaleIpRaw = (& $tailscaleExe ip --4 | Out-String).Trim()
+          Write-Host "Raw Tailscale IP output: '$tailscaleIpRaw'"
+          $tailscaleIp = $tailscaleIpRaw -replace '\s+', ''
           if (-not $tailscaleIp -or $tailscaleIp -notmatch "^\d+\.\d+\.\d+\.\d+$") {
-              Write-Error "Failed to retrieve valid Tailscale IP, raw output: $tailscaleIpRaw"
+              Write-Error "Failed to retrieve valid Tailscale IP, raw output: '$tailscaleIpRaw'"
               exit 1
           }
           # Debug: Output Tailscale status for reference
