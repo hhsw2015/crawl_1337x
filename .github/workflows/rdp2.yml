@@ -12,8 +12,11 @@ jobs:
           choco install winrar -y
           choco install telegram -y
           choco install tailscale -y
+          # Refresh environment variables
+          refreshenv
+          # Check if tailscale command is available
           if (-not (Get-Command tailscale -ErrorAction SilentlyContinue)) {
-              Write-Error "Tailscale installation failed"
+              Write-Error "Tailscale installation failed or command not found"
               exit 1
           }
       shell: pwsh
