@@ -68,32 +68,24 @@ jobs:
               Write-Error "TAILSCALE_AUTH_KEY is not set"
               exit 1
           }
-          try {
-              # Start Tailscale and authenticate using full path
-              & $tailscaleExe up --auth-key=$authKey --hostname="github-runner-$env:GITHUB_RUN_ID" 2>&1 | Out-String
-              Write-Host "Tailscale up executed"
-              # Wait for Tailscale to connect
-              Start-Sleep -Seconds 60
-              # Get Tailscale IP to verify connection
-              $tailscaleIpRaw = (& $tailscaleExe ip --4 | Out-String).Trim()
-              Write-Host "Raw Tailscale IP output: '$tailscaleIpRaw'"
-              $tailscaleIp = $tailscaleIpRaw -replace '\s+', ''
-              if (-not $tailscaleIp -or $tailscaleIp -notmatch "^\d+\.\d+\.\d+\.\d+$") {
-                  Write-Error "Failed to retrieve valid Tailscale IP, raw output: '$tailscaleIpRaw'"
-                  exit 1
-              }
-              # Debug: Output Tailscale status for reference
-              $status = & $tailscaleExe status | Out-String
-              Write-Host "Tailscale status: $status"
-              # Output RDP connection details
-              Write-Host "RDP Connection: $tailscaleIp:3389"
-              Write-Host "Username: runneradmin"
-              Write-Host "Password: ${{ secrets.RDP_PASSWORD }}"
-              Write-Host "RDP Access: Use the above IP and port in Remote Desktop client"
-              # Keep the job running for 6 hours
-              Start-Sleep -Seconds 21600
-          } catch {
-              Write-Error "Tailscale configuration failed: $_"
+          # Start Tailscale and authenticate using full path
+          & $tailscaleExe up --auth-key=$authKey --hostname="github-runner-$env:GITHUB_RUN_ID"
+          # Wait for Tailscale to connect
+          Start-Sleep -Seconds 30
+          # Get Tailscale IP to verify connection
+          $tailscaleIp = & $tailscaleExe ip --4
+          if (-not $tailscaleIp) {
+              Write-Error "Failed to retrieve Tailscale IP, connection may not be established"
               exit 1
           }
+          # Debug: Output Tailscale status for reference
+          $status = & $tailscaleExe status
+          Write-Host "Tailscale status: $status"
+          # Output RDP connection details
+          Write-Host "RDP Connection: $tailscaleIp:3389"
+          Write-Host "Username: runneradmin"
+          Write-Host "Password: ${{ secrets.RDP_PASSWORD }}"
+          Write-Host "RDP Access: Use the above IP and port in Remote Desktop client"
+          # Keep the job running for 6 hours
+          Start-Sleep -Seconds 21600
       shell: pwsh
