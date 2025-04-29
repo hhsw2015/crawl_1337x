@@ -7,21 +7,33 @@ jobs:
     runs-on: windows-latest
 
     steps:
-    - name: Download Essentials
+    - name: Install Tailscale
       run: |
-          choco install winrar -y
-          choco install telegram -y
-          choco install tailscale -y
-          # Refresh environment variables
-          refreshenv
-          # Check if tailscale command is available
+          # Download Tailscale .exe installer
+          $installerUrl = "https://pkgs.tailscale.com/stable/tailscale-setup-latest.exe"
+          $installerPath = "$env:TEMP\tailscale-setup-latest.exe"
+          Invoke-WebRequest -Uri $installerUrl -OutFile $installerPath
+          # Run the installer silently
+          Start-Process -FilePath $installerPath -ArgumentList "/S" -Wait
+          # Verify Tailscale executable exists
+          if (-not (Test-Path "C:\Program Files\Tailscale\tailscale.exe" -ErrorAction SilentlyContinue)) {
+              Write-Error "Tailscale installation failed or executable not found"
+              exit 1
+          }
+          # Add Tailscale to PATH if not already present
+          $tailscalePath = "C:\Program Files\Tailscale"
+          if ($env:PATH -notlike "*$tailscalePath*") {
+              $env:PATH = "$env:PATH;$tailscalePath"
+              [Environment]::SetEnvironmentVariable("PATH", $env:PATH, [EnvironmentVariableTarget]::Process)
+          }
+          # Verify tailscale command
           if (-not (Get-Command tailscale -ErrorAction SilentlyContinue)) {
-              Write-Error "Tailscale installation failed or command not found"
+              Write-Error "Tailscale command not found after installation"
               exit 1
           }
       shell: pwsh
 
-    - name: Enable RDP and SSH
+    - name: Enable RDP
       run: |
           # Check runneradmin user
           if (-not (Get-LocalUser -Name "runneradmin" -ErrorAction SilentlyContinue)) {
@@ -34,19 +46,6 @@ jobs:
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 1
           # Set password
           Set-LocalUser -Name "runneradmin" -Password (ConvertTo-SecureString -AsPlainText "${{ secrets.RDP_PASSWORD }}" -Force)
-          # Install OpenSSH Server
-          Add-WindowsCapability -Online -Name OpenSSH.Server~~~~0.0.1.0
-          # Start SSH service
-          Start-Service sshd
-          Set-Service -Name sshd -StartupType 'Automatic'
-          # Configure SSH to allow password authentication
-          $sshdConfig = "C:\ProgramData\ssh\sshd_config"
-          (Get-Content $sshdConfig) -replace '#PasswordAuthentication yes', 'PasswordAuthentication yes' | Set-Content $sshdConfig
-          (Get-Content $sshdConfig) -replace '#PermitRootLogin prohibit-password', 'PermitRootLogin yes' | Set-Content $sshdConfig
-          # Ensure firewall allows SSH (port 22)
-          New-NetFirewallRule -Name 'OpenSSH-Server-In-TCP' -DisplayName 'OpenSSH Server (sshd)' -Enabled True -Direction Inbound -Protocol TCP -Action Allow -LocalPort 22
-          # Restart SSH service
-          Restart-Service sshd
       shell: pwsh
 
     - name: Configure and Start Tailscale
@@ -77,7 +76,6 @@ jobs:
           Write-Host "Username: runneradmin"
           Write-Host "Password: ${{ secrets.RDP_PASSWORD }}"
           Write-Host "RDP Access: Use Tailscale IP in Remote Desktop client"
-          Write-Host "SSH Access: ssh runneradmin@$tailscaleIp"
           # Keep the job running for 6 hours
           Start-Sleep -Seconds 21600
       shell: pwsh
