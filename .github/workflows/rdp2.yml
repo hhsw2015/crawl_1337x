@@ -16,21 +16,13 @@ jobs:
           # Run the installer silently
           Start-Process -FilePath $installerPath -ArgumentList "/S" -Wait
           # Verify Tailscale executable exists
-          if (-not (Test-Path "C:\Program Files\Tailscale\tailscale.exe" -ErrorAction SilentlyContinue)) {
-              Write-Error "Tailscale installation failed or executable not found"
+          $tailscaleExe = "C:\Program Files\Tailscale\tailscale.exe"
+          if (-not (Test-Path $tailscaleExe -ErrorAction SilentlyContinue)) {
+              Write-Error "Tailscale installation failed or executable not found at $tailscaleExe"
               exit 1
           }
-          # Add Tailscale to PATH if not already present
-          $tailscalePath = "C:\Program Files\Tailscale"
-          if ($env:PATH -notlike "*$tailscalePath*") {
-              $env:PATH = "$env:PATH;$tailscalePath"
-              [Environment]::SetEnvironmentVariable("PATH", $env:PATH, [EnvironmentVariableTarget]::Process)
-          }
-          # Verify tailscale command
-          if (-not (Get-Command tailscale -ErrorAction SilentlyContinue)) {
-              Write-Error "Tailscale command not found after installation"
-              exit 1
-          }
+          # Debug: Confirm executable path
+          Write-Host "Tailscale executable found at: $tailscaleExe"
       shell: pwsh
 
     - name: Enable RDP
@@ -50,23 +42,29 @@ jobs:
 
     - name: Configure and Start Tailscale
       run: |
+          $tailscaleExe = "C:\Program Files\Tailscale\tailscale.exe"
+          # Verify Tailscale executable exists
+          if (-not (Test-Path $tailscaleExe)) {
+              Write-Error "Tailscale executable not found at $tailscaleExe"
+              exit 1
+          }
           $authKey = "${{ secrets.TAILSCALE_AUTH_KEY }}"
           if (-not $authKey) {
               Write-Error "TAILSCALE_AUTH_KEY is not set"
               exit 1
           }
-          # Start Tailscale and authenticate
-          tailscale up --auth-key=$authKey --hostname="github-runner-$env:GITHUB_RUN_ID"
+          # Start Tailscale and authenticate using full path
+          & $tailscaleExe up --auth-key=$authKey --hostname="github-runner-$env:GITHUB_RUN_ID"
           # Wait for Tailscale to connect
           Start-Sleep -Seconds 20
           # Check Tailscale status
-          $status = (tailscale status)
+          $status = & $tailscaleExe status
           if ($status -notmatch "connected") {
               Write-Error "Tailscale failed to connect: $status"
               exit 1
           }
           # Get Tailscale IP
-          $tailscaleIp = (tailscale ip --4)
+          $tailscaleIp = & $tailscaleExe ip --4
           if (-not $tailscaleIp) {
               Write-Error "Failed to retrieve Tailscale IP"
               exit 1
